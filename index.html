@@ -26,7 +26,7 @@
             color: var(--text);
             margin: 0;
             padding: 0;
-            overscroll-behavior-y: contain; /* Prevents pull-to-refresh on mobile */
+            overscroll-behavior-y: contain;
         }
 
         .container {
@@ -91,9 +91,46 @@
         }
         .badge-hse { background: var(--danger); color: white; }
 
-        /* Image Preview */
+        /* Image Preview in Audit Card */
         .image-preview {
-            max-width: 100%; max-height: 200px; border-radius: 5px; display: none; margin-top: 10px;
+            max-width: 100%; 
+            max-height: 200px; 
+            border-radius: 5px; 
+            display: none; 
+            margin-top: 10px;
+            cursor: zoom-in;
+            border: 2px solid var(--border);
+        }
+
+        /* FULL SCREEN IMAGE MODAL STYLES */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 2000; 
+            left: 0;
+            top: 0;
+            width: 100%; 
+            height: 100%; 
+            background-color: rgba(0,0,0,0.9); 
+        }
+        .modal-content {
+            margin: auto;
+            display: block;
+            max-width: 95%;
+            max-height: 90vh;
+            position: relative;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .close-modal {
+            position: absolute;
+            top: 15px;
+            right: 25px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 2001;
         }
 
         #loading-overlay {
@@ -108,6 +145,12 @@
     </style>
 </head>
 <body>
+
+    <!-- Image Zoom Modal -->
+    <div id="image-modal" class="modal">
+        <span class="close-modal" onclick="closeModal()">&times;</span>
+        <img class="modal-content" id="modal-img">
+    </div>
 
     <div id="loading-overlay">
         <div class="spinner"></div>
@@ -139,18 +182,21 @@
                 <button class="btn-primary" onclick="startAudit()">Start Audit</button>
             </div>
 
+            <!-- PAST AUDITS SECTION WITH NEW DOWNLOAD BUTTON -->
             <div class="card">
                 <h3>View Past Audit</h3>
                 <div class="form-group">
                     <input type="text" id="search-audit-id" placeholder="e.g. 260728-8A3F">
                 </div>
-                <button class="btn-outline" onclick="fetchPastAudit()">Search</button>
+                <div class="nav-buttons" style="margin-top: 0;">
+                    <button class="btn-outline" onclick="fetchPastAudit()">View Audit</button>
+                    <button class="btn-primary" onclick="downloadPastAuditDirect()">Download PDF</button>
+                </div>
             </div>
         </div>
 
         <!-- 2. AUDIT QUESTION VIEW -->
         <div id="audit-view" class="view">
-            <!-- Progress text -->
             <p style="text-align: center; color: #666; font-weight: bold; margin-bottom: 10px;" id="q-progress">Question 1 of 45</p>
             
             <div class="card" id="swipe-area">
@@ -172,17 +218,17 @@
                 <div class="form-group">
                     <label>Evidence Picture (Optional)</label>
                     
-                    <!-- WhatsApp Style Buttons -->
                     <div id="image-controls" style="display: flex; gap: 10px; margin-bottom: 10px;">
                         <button type="button" class="btn-outline" onclick="document.getElementById('q-image-cam').click()" style="margin: 0;">📷 Camera</button>
                         <button type="button" class="btn-outline" onclick="document.getElementById('q-image-gal').click()" style="margin: 0;">🖼️ Gallery</button>
                     </div>
                     
-                    <!-- Hidden Inputs -->
                     <input type="file" id="q-image-cam" accept="image/*" capture="environment" style="display:none;">
                     <input type="file" id="q-image-gal" accept="image/*" style="display:none;">
                     
-                    <img id="q-image-preview" class="image-preview" src="">
+                    <img id="q-image-preview" class="image-preview" src="" onclick="openModal()">
+                    <p id="zoom-hint" style="font-size:12px; color:#666; display:none; margin-top:5px;">Tap image to enlarge</p>
+                    
                     <button type="button" id="btn-remove-img" class="btn-danger" style="display: none; margin-top: 10px;" onclick="removeImage()">🗑️ Remove Image</button>
                 </div>
                 
@@ -209,7 +255,9 @@
                     <textarea id="special-comment" rows="4" placeholder="Any final thoughts on the audit..."></textarea>
                 </div>
 
+                <!-- Kept original auto-download setup -->
                 <button class="btn-success" id="btn-submit" onclick="submitAudit()">Submit & Download PDF</button>
+
                 <button class="btn-outline" onclick="goToQuestion(0)">Back to Review Questions</button>
             </div>
         </div>
@@ -229,7 +277,6 @@
     </div>
 
 <script>
-    // System Constants & State
     // !!! MAKE SURE THIS URL MATCHES YOUR LATEST DEPLOYMENT !!!
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyaZuYo5az-x32YBaswjpx8e9gPJglS8Z1iw72F9t_o_1mMnVsDyHxwspas3QMQQpng0g/exec';
     
@@ -247,7 +294,6 @@
         setupImageCompression();
     });
 
-    // Generates a short, collision-proof ID (e.g., 260728-8A3F)
     function generateUniqueId() {
         const now = new Date();
         const yy = now.getFullYear().toString().slice(-2);
@@ -396,14 +442,17 @@
         document.getElementById('q-image-gal').value = '';
         
         const preview = document.getElementById('q-image-preview');
+        const zoomHint = document.getElementById('zoom-hint');
         const removeBtn = document.getElementById('btn-remove-img');
         
         if (state.imageBase64 || state.imageUrl) {
             preview.src = state.imageBase64 || state.imageUrl;
             preview.style.display = 'block';
+            zoomHint.style.display = 'block';
             removeBtn.style.display = (state.isConfirmed || isReadOnlyMode) ? 'none' : 'block';
         } else {
             preview.style.display = 'none';
+            zoomHint.style.display = 'none';
             preview.src = '';
             removeBtn.style.display = 'none';
         }
@@ -535,12 +584,36 @@
         });
     }
 
+    // --- MODAL LOGIC ---
+    function openModal() {
+        const modal = document.getElementById("image-modal");
+        const modalImg = document.getElementById("modal-img");
+        const previewSrc = document.getElementById("q-image-preview").src;
+        
+        if (previewSrc) {
+            modal.style.display = "block";
+            modalImg.src = previewSrc;
+        }
+    }
+
+    function closeModal() {
+        document.getElementById("image-modal").style.display = "none";
+    }
+    
+    window.onclick = function(event) {
+        const modal = document.getElementById("image-modal");
+        if (event.target == modal) {
+            modal.style.display = "none";
+        }
+    }
+
     // --- IMAGE COMPRESSION & REMOVAL ---
     function removeImage() {
         document.getElementById('q-image-cam').value = '';
         document.getElementById('q-image-gal').value = '';
         document.getElementById('q-image-preview').src = '';
         document.getElementById('q-image-preview').style.display = 'none';
+        document.getElementById('zoom-hint').style.display = 'none';
         document.getElementById('btn-remove-img').style.display = 'none';
         saveCurrentInput(false); 
     }
@@ -574,6 +647,7 @@
                     const preview = document.getElementById('q-image-preview');
                     preview.src = dataUrl;
                     preview.style.display = 'block';
+                    document.getElementById('zoom-hint').style.display = 'block';
                     
                     document.getElementById('btn-remove-img').style.display = 'block';
                 }
@@ -611,7 +685,13 @@
             alert(`Warning: You have ${unconfirmedCount} unanswered/unconfirmed questions.`);
         }
 
-        document.getElementById('btn-submit').style.display = isReadOnlyMode ? 'none' : 'block';
+        // Hide submit button in read only mode
+        if (isReadOnlyMode) {
+            document.getElementById('btn-submit').style.display = 'none';
+        } else {
+            document.getElementById('btn-submit').style.display = 'block';
+        }
+        
         document.getElementById('special-comment').value = auditData.specialComment || '';
         document.getElementById('special-comment').disabled = isReadOnlyMode;
 
@@ -676,12 +756,15 @@
         
         doc.setFontSize(10);
         doc.text(`Audit ID: ${auditId}`, 14, 30);
-        doc.text(`Store: ${data.storeName} (${data.storeCode})`, 14, 36);
-        doc.text(`Auditor: ${data.auditor}`, 14, 42);
+        doc.text(`Store: ${data.storeName || data.metadata.storeName} (${data.storeCode || data.metadata.storeCode})`, 14, 36);
+        doc.text(`Auditor: ${data.auditor || data.metadata.auditor}`, 14, 42);
         doc.text(`Score: ${data.totalScore}`, 14, 48);
         doc.text(`Date: ${data.metadata.date}`, 14, 54);
 
-        const tableBody = data.answers.map(ans => {
+        // Normalize answers array (it might be an object map if it's a freshly fetched historical audit)
+        const answersArray = Array.isArray(data.answers) ? data.answers : Object.values(data.answers);
+
+        const tableBody = answersArray.map(ans => {
             let status = ans.value;
             if (status === '1') status = 'Compliance';
             else if (status === '0.5') status = 'Partial';
@@ -749,9 +832,13 @@
                 auditData.specialComment = data.specialComment;
                 
                 auditData.answers = {};
-                data.answers.forEach(ans => {
-                    auditData.answers[ans.srNo] = ans;
-                });
+                if (Array.isArray(data.answers)) {
+                    data.answers.forEach(ans => {
+                        auditData.answers[ans.srNo] = ans;
+                    });
+                } else {
+                    auditData.answers = data.answers; 
+                }
 
                 currentIndex = 0;
                 renderQuestion();
@@ -760,6 +847,30 @@
         } catch (error) {
             hideLoading();
             alert("Error fetching audit.");
+        }
+    }
+
+    // --- DIRECT PDF DOWNLOAD FROM START SCREEN ---
+    async function downloadPastAuditDirect() {
+        const id = document.getElementById('search-audit-id').value.trim();
+        if(!id) return alert("Enter an Audit ID");
+
+        showLoading("Fetching & Generating PDF...");
+        try {
+            const response = await fetch(`${SCRIPT_URL}?auditId=${id}`);
+            const data = await response.json();
+            
+            hideLoading();
+            
+            if (data.error) {
+                alert("Audit not found.");
+            } else {
+                // Instantly generate and download the PDF using the fetched data
+                generatePDF(id, data);
+            }
+        } catch (error) {
+            hideLoading();
+            alert("Error fetching audit for PDF generation.");
         }
     }
 
